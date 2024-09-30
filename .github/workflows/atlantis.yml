@@ -1,0 +1,35 @@
+name: Atlantis deploy
+on: [workflow_dispatch]
+jobs:
+  Deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest   
+    steps:
+      - uses: actions/checkout@v2 
+      - name: Build & Deploy
+        env:
+            PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+            HOSTNAME: ${{secrets.SSH_HOST}}
+            USER_NAME: ${{secrets.USER_NAME}}
+      
+        run: |
+           #access EC2
+           echo "$PRIVATE_KEY" > private_key && chmod 600 private_key
+           ssh -o StrictHostKeyChecking=no -i private_key ${USER_NAME}@${HOSTNAME} '
+           #install docker
+           sudo yum update -y
+           sudo yum search docker -y
+           sudo yum install docker -y
+           sudo systemctl enable docker.service
+           sudo systemctl start docker.service
+           sudo systemctl status docker.service
+           #create atlantis docker image
+           sudo docker build -t atlantis .
+           #run atlantis container
+           sudo docker run -itd -p 4000:4141 --name atlantis atlantis server --automerge --autoplan-modules --gh-user=mytest9345 --gh-token=${{secrets.GITHUB_TOKEN}} --repo-allowlist=github.com/mytest9345/atlantis
+           #access container and add AWS creds
+           sudo docker exec -it atlantis /bin/sh
+           aws configure
+           ACCESS_KEY_ID: ${{secrets.ACCESS_KEY_ID}}
+           SECRET_ACCESS_KEY: ${{secrets.SECRET_ACCESS_KEY}}
+           
